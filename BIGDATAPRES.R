@@ -1,4 +1,6 @@
 library(tidyverse)
+library(corrplot)
+library(car)
 
 # 1) Open and clean the file -------------------------------------------------
 
@@ -31,8 +33,8 @@ fifa <- drop_na(fifa)
 
 ### We have to create a vector with the desired order
 
-order <- c("GK", "CB", "RCB", "LCB", "RB", "LB", "CDM", 
-           "RDM", "LDM", "LWB", "RWB", "RCM", "LCM",
+order <- c("GK", "CB", "RCB", "LCB", "RB", "LB", "LWB",
+           "RWB", "CDM", "RDM", "LDM", "RCM", "LCM",
            "CM", "RM", "LM", "CAM", "RAM", "LAM", "RW", 
            "LW", "RF", "LF", "CF", "ST", "RS", "LS")
 
@@ -40,7 +42,9 @@ order <- c("GK", "CB", "RCB", "LCB", "RB", "LB", "CDM",
 
 fifa_ordered <- fifa %>% mutate(
   Position =  factor(Position, levels = order)) %>%
-  arrange(Position)
+  arrange(Position) 
+ 
+fifa_ordered <- fifa_ordered[-c(1:1900),] ### Let's drop all rows dedicated to goalkeepers
 
 ### Now that they are ordered, let's check if offensive and defensive positions
 ### have different average overalls
@@ -52,5 +56,44 @@ fifa_ordered %>% group_by(Position) %>%
 
 ### It does indeed seem like there is are higher average overalls
 ### for offensive positions rather than defensive
+
+### Let's add a new column where we group all of the positions in:
+### "Defender", "Midfielder", "Striker"
+
+fifa_ordered2 <- fifa_ordered %>% mutate(Position = case_when(
+  Position %in% c("CB", "RCB", "LCB", "RB", "LB", "LWB", "RWB") ~ "Defender",
+  Position %in% c("CDM", "RDM", "LDM", "RCM", "LCM", "CM", "RM", "LM", "CAM", "RAM", "LAM") ~ "Midfielder",
+  Position %in% c("RW", "LW", "RF", "LF", "CF", "ST", "RS", "LS") ~ "Striker"
+))
+
+### Now we can check the distribution of overalls for each role
+
+ggplot(fifa_ordered2, aes(x = Position, y = Overall, fill = Position)) +
+  geom_boxplot() +
+  labs(title = "Overall distribution per position",
+       x = "Position",
+       y = "Overall") +
+  scale_fill_brewer(palette = "Set1") +  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+# 3) Correlations and model building --------------------------------------
+
+
+cor_matrix <- cor(fifa_ordered2[, c("Overall", "Crossing", "Finishing", "HeadingAccuracy", "ShortPassing", "Volleys", 
+                            "Dribbling", "Curve", "FKAccuracy", "LongPassing", "BallControl", "Acceleration", 
+                            "SprintSpeed", "Agility", "Reactions", "Balance", "ShotPower", "Jumping", "Stamina", 
+                            "Strength", "LongShots", "Aggression", "Interceptions", "Positioning", "Vision", 
+                            "Penalties", "Composure", "Marking", "StandingTackle", "SlidingTackle")], 
+                  use = "complete.obs")
+
+corrplot(cor_matrix, method = "circle")
+
+### Variables to combine: Sliding and standing tackle (Tackle); Long passing, short passing, crossing and vision (passing)
+### Acceleration and sprint speed (speed); Ball control, dribbling (Dribbling); Finishing, Volley, shot power, long shots (Shots)
+### Agility and balance (Equilibrium); Aggression, Interceptions and marking (Ball recovery)
+
+
 
 
