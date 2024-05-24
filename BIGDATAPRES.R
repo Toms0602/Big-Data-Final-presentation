@@ -1,6 +1,7 @@
 library(tidyverse)
 library(corrplot)
 library(car)
+library(gamlss)
 
 # 1) Open and clean the file -------------------------------------------------
 
@@ -90,10 +91,61 @@ cor_matrix <- cor(fifa_ordered2[, c("Overall", "Crossing", "Finishing", "Heading
 
 corrplot(cor_matrix, method = "circle")
 
+### Some variables have very high correlation and are conceptually very similar. We can combine them.
 ### Variables to combine: Sliding and standing tackle (Tackle); Long passing, short passing, crossing and vision (passing)
-### Acceleration and sprint speed (speed); Ball control, dribbling (Dribbling); Finishing, Volley, shot power, long shots (Shots)
+### Acceleration and sprint speed (speed); Ball control, dribbling (Technique); Finishing, Volleys, shot power, long shots (Shooting)
 ### Agility and balance (Equilibrium); Aggression, Interceptions and marking (Ball recovery)
 
+### Since these variables are highly positevily correlated, we can say that, on average,
+### If one is high, the other is high aswell, and viceversa. So, we can just combine them
+### by doing an average
 
+fifa_ordered3 <- fifa_ordered2 %>% 
+  mutate(Tackle = (SlidingTackle + StandingTackle)/2) %>%
+  mutate(Passing = (LongPassing + ShortPassing + Crossing + Vision)/4) %>%
+  mutate(Speed = (Acceleration + SprintSpeed)/2) %>%
+  mutate(Technique = (BallControl + Dribbling)/2) %>%
+  mutate(Shooting = (Finishing + Volleys + ShotPower + LongShots)/4) %>%
+  mutate(Equilibrium = (Agility + Balance)/2) %>%
+  mutate(BallRecovery = (Aggression + Interceptions + Marking)/3) %>%
+  select(!c(SlidingTackle, StandingTackle, LongPassing, ShortPassing, 
+             Crossing, Vision, Acceleration , SprintSpeed, BallControl, 
+             Dribbling, Finishing, Volleys, ShotPower, LongShots, Agility,
+             Balance, Aggression, Interceptions, Marking,
+             GKDiving, GKHandling, GKKicking, GKPositioning,
+             GKReflexes, Release.Clause)) ### We erased the variables we combined, and removed other unnecessary ones
 
+### Now, let's check for correlations again (only of the new variables we used)
 
+cor_matrix2 <- cor(fifa_ordered3[, c("Tackle", "Passing", "Speed",
+                                     "Technique", "Shooting", "Equilibrium",
+                                     "BallRecovery")], 
+                  use = "complete.obs")
+
+corrplot(cor_matrix2, method = "circle")
+
+### There is still very high correlation between many of the covariates, 
+### let's see if we can improve things
+
+fifa_ordered3 <- fifa_ordered2 %>% 
+  mutate(Aggressiveness = (SlidingTackle + StandingTackle + 
+                             Aggression + Interceptions + Marking)/5) %>%
+  mutate(Speed = (Acceleration + SprintSpeed + Agility + Balance)/4) %>%
+  mutate(Technique = (BallControl + Dribbling + LongPassing + 
+                        ShortPassing + Crossing + Vision)/6) %>%
+  mutate(Shooting = (Finishing + Volleys + ShotPower + LongShots)/4) %>%
+  select(!c(SlidingTackle, StandingTackle, LongPassing, ShortPassing, 
+            Crossing, Vision, Acceleration , SprintSpeed, BallControl, 
+            Dribbling, Finishing, Volleys, ShotPower, LongShots, Agility,
+            Balance, Aggression, Interceptions, Marking,
+            GKDiving, GKHandling, GKKicking, GKPositioning,
+            GKReflexes, Release.Clause))
+
+cor_matrix2 <- cor(fifa_ordered3[, c("Aggressiveness", "Speed",
+                                     "Technique", "Shooting")], 
+                   use = "complete.obs")
+
+corrplot(cor_matrix2, method = "circle")
+
+### There is still high correlation between some of the covariates but it looks like
+### an improvement. 
