@@ -72,7 +72,7 @@ fifa <- fifa %>% mutate(Role = case_when(
   Position %in% c("CB", "RCB", "LCB", "RB", "LB", "LWB", "RWB") ~ "Defender",
   Position %in% c("CDM", "RDM", "LDM", "RCM", "LCM", "CM", "RM", "LM", "CAM", "RAM", "LAM") ~ "Midfielder",
   Position %in% c("RW", "LW", "RF", "LF", "CF", "ST", "RS", "LS") ~ "Attacker",
-  TRUE ~ "Other"  # Questo gestisce eventuali posizioni non elencate
+  TRUE ~ "Other"  
 ))
 
 head(fifa)
@@ -193,25 +193,25 @@ pca_results <- PCA(fifa3[, c("Aggressiveness", "Speed", "Technique", "Shooting",
 # Visualizza il grafico delle variabili (loading plot)
 fviz_pca_var(pca_results, col.var = "contrib", 
              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE)  # Usa repel per evitare sovrapposizione di etichette
+             repel = TRUE)  
 
 
 fviz_pca_ind(pca_results,
-             geom.ind = "point", # Usa solo punti, senza testo
-             col.ind = fifa3$Role, # Colora in base al ruolo
-             palette = c("blue", "red", "green"), # Imposta i colori per i ruoli
-             addEllipses = TRUE, # Aggiungi ellissi di confidenza per ciascun ruolo
-             ellipse.level = 0.95, # Livello di confidenza per le ellissi
-             pointshape = 21, # Forma dei punti (21 è un cerchio pieno)
-             pointsize = 2, # Dimensione dei punti
-             fill.ind = fifa3$Role, # Riempimento dei punti basato sui ruoli
+             geom.ind = "point", 
+             col.ind = fifa3$Role, 
+             palette = c("blue", "red", "green"), 
+             addEllipses = TRUE, 
+             ellipse.level = 0.95, 
+             pointshape = 21, 
+             pointsize = 2, 
+             fill.ind = fifa3$Role, 
              legend.title = "Role",
              axes.labs = c("PC1", "PC2")) +
   theme_minimal() +
-  theme(legend.position = "right", # Posiziona la legenda a destra
-        axis.text = element_text(size = 12), # Dimensione testo degli assi
-        axis.title = element_text(size = 14), # Dimensione titoli degli assi
-        legend.text = element_text(size = 12)) # Dimensione testo della legenda
+  theme(legend.position = "right", 
+        axis.text = element_text(size = 12), 
+        axis.title = element_text(size = 14), 
+        legend.text = element_text(size = 12)) 
 
 
 
@@ -245,10 +245,9 @@ ggplot(fifa3, aes(x = LD1, fill = Role)) +
   labs(title = "Distribution of LDA Scores by Player Role",
        x = "First Linear Discriminant (LD1)",
        y = "Frequency") +
-  scale_fill_brewer(palette = "Set1") +  # Usa una palette di colori per distinguere i ruoli
+  scale_fill_brewer(palette = "Set1") +  
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Migliora la leggibilità
-
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
 
 
 
@@ -333,7 +332,6 @@ ggplot(best_pairs, aes(x = VariablePair, y = TotalCount, fill = Role)) +
        x = "Variable Pairs",
        y = "Total Count",
        fill = "Role") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Ruota i nomi delle variabili sull'asse X per migliorare la leggibilità
-
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
 
 
