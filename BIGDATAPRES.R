@@ -13,7 +13,7 @@ fifa <- read.csv("FIFA.csv")
 
 fifa <- fifa %>% select(!c(Wage, Special, International.Reputation,
                            Contract.Valid.Until, Height, Weight))
-### With the "!! operator we are basically keeping all the variables except the
+### With the ! operator we are basically keeping all the variables except the
 ### ones we wrote in the code
 
 ### Now let's check for NA's
