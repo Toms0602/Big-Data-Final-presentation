@@ -285,89 +285,209 @@ ggplot(best_pairs, aes(x = VariablePair, y = TotalCount, fill = Position)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  
 
 
+# 5) Classification -------------------------------------------------------
 
+# 5.1) With k-nearest neighbours ------------------------------------------
 
+library(tidymodels)
+library(nnet)
+library(parsnip)
+library(recipes)
+library(workflows)
+library(yardstick)
 
+### We need to perform some data cleaning operations first.
+### We don't want our dataset to be ordered by Position anymore.
 
+fifa_ordered3$Position = sample(fifa_ordered3$Position)
 
+### Then, let's reduce the dataset size by only choosing the variables of interest
+### for the analysis (the player stats and the response (position)).
+### We also want to reduce the number of observations because otherwise it will
+### require too much computational power
 
+fifa_cleaned <- fifa_ordered3 %>%
+  dplyr::select(c(12, 40:52)) %>%
+  slice(1:(round(15918 * 0.70)))
 
+### Split the data into 70% per training and 30% for testing
 
+set.seed(2056)
 
+fifa_split <- fifa_cleaned %>%
+  initial_split(prop = 0.70)
 
+### Extract the data in each split
 
+fifa_train <- training(fifa_split)
+fifa_test <- testing(fifa_split)
 
+### Let's see exactly how many observations we have in training and testing
 
+cat("Training cases: ", nrow(fifa_train), "\n",
+    "Test cases: ", nrow(fifa_test), sep = "")
+### We have 11142 training cases and 4776 testing cases
 
+### Let's specifiy a multinomial regression via nnet
 
+mr_spec <- multinom_reg(
+  penalty = 1,
+  engine = "nnet",
+  mode = "classification")
 
+### To be sure, let's create a recipe that specifies that predictors
+### should be on the same scale
 
+fifa_recipe <- recipe(Position ~ ., data = fifa_train) %>%
+  step_normalize(all_numeric_predictors())
 
+### Bundle recipe and model specification into a workflow
 
+mr_wflow <- workflow(preprocessor = fifa_recipe, spec = mr_spec)
 
+print(mr_wflow)
 
+### Now let's fit the workflow object
 
+mr_wflow_fit <- mr_wflow %>%
+  fit(data = fifa_train)
 
+mr_wflow_fit
 
+### Let's obtain predictions on the test set
 
+results <- augment(mr_wflow_fit, fifa_test)
 
+results %>% slice_head(n = 10)
 
+### It's easier to evaluate using a confusion matrix
 
+results %>%
+  conf_mat(truth = Position, estimate = .pred_class)
 
+### In this case only the midfielders got predicted accurately (93% correctly predicted)
+### However, this model performed really badly in predicting defenders and strikers. 
 
+### It could be easier to visualise this through a heat map:
 
+update_geom_defaults(geom = "tile", new = list(color = "black",
+                                               alpha = 0.7))
 
+results %>% 
+  conf_mat(Position, .pred_class) %>%
+  autoplot(type = "heatmap")
 
+### We can notice there are very bad predictions. 
+### We can show it even better by using the yarstick package to 
+### calulcate Accuracy, Precision and Recall
 
+accuracy = accuracy(data = results, truth = Position,
+                    estimate = .pred_class)
+precision = precision(data = results, truth = Position,
+                      estimate = .pred_class)
+recall = recall(data = results, truth = Position,
+                estimate = .pred_class)
 
+### Print the metrics
 
+accuracy %>% 
+  bind_rows(precision) %>%
+  bind_rows(recall)
+### Very low values
 
+### Let's try other models now
 
+library(caret)
+library(rpart)
+library(e1071)
+library(randomForest)
 
 
+# We create training and testing data we'll use for all our models --------
 
+fifa_cleaned$Position <- factor(fifa_cleaned$Position)
 
+set.seed(123)
 
+inTrain <- createDataPartition(y = fifa_cleaned$Position, p = .70,
+                               list = FALSE)
 
+training <- fifa_cleaned[inTrain,]
+testing <- fifa_cleaned[-inTrain,]
 
+# CART --------------------------------------------------------------------
 
+### It stands for classification and regression trees
 
+train_control <- trainControl(method = "cv", number = 20,
+                              savePredictions = TRUE)
+### We used 10fold cross-validation
 
+M_CART <- train(Position ~ ., data = training,
+                trControl = train_control, tuneLength = 20,
+                method = "rpart")
+plot(M_CART)
+M_CART$bestTune ### Returns the best complexity parameter
 
+confusionMatrix(predict(M_CART, testing), testing$Position)
+### Again, it struggles to predict defenders and strikers. 
 
 
+# RANDOM FOREST -----------------------------------------------------------
 
+### Caret package implementation with 20-fold cross validation
 
+train_control <- trainControl(method = "cv",
+                              number = 20,
+                              savePredictions = TRUE)
 
+RF1 <- train(Position ~ ., method = "rf", 
+             trControl = train_control,
+             preProcess = c("center", "scale"),
+             tuneLength = 2,
+             data = training)
 
+print(RF1)
+### Again, accuracy is not great
 
+confusionMatrix(predict(RF1, testing), testing$Position)
+### The random forest predicts defenders a bit better than other methods.
+### There is still an issue with the strikers.
 
+### Let's do a random forest again but with the randomForest package
 
+RF2 <- randomForest(Position ~ ., training)
 
+print(RF2)
+### This package does a better job than other techniques tried so far.
+### Still, there is low accuracy
+confusionMatrix(predict(RF2, testing), testing$Position)
 
 
+# SUPPORT VECTOR MACHINE --------------------------------------------------
 
+### e1071 package implementation
 
+SVM1 <- svm(Position ~ ., data = training)
 
+confusionMatrix(predict(SVM1, testing), testing$Position)
+### This also didn't perform well
 
+### We can tune this 
 
+svm_tune <- tune(svm, train.x = training[,-1], train.y = training[,1],
+                 ranges = list(cost = 10^(-1:2), gamma = c(.5, 1, 2)))
+### We have to tune the cost and gamma parameters. We are checking for 
+### 3 different values of cost parameter and gamma parameter
 
+print(svm_tune) ### Allows you to select best cost and gamma parameter
 
+### Doesn't run, too much computational power required
 
+### This is the code after selection the optimal parameters:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+SVM_RETUNE <- svm(Position ~ ., data = training, cost = ..., gamma = ...)
+confusionMatrix(preditc(SVM_RETUNE, testing), testing$Position)
 
 
 
