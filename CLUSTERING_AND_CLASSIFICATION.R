@@ -287,7 +287,7 @@ ggplot(best_pairs, aes(x = VariablePair, y = TotalCount, fill = Position)) +
 
 # 5) Classification -------------------------------------------------------
 
-# 5.1) With k-nearest neighbours ------------------------------------------
+# 5.1) With multinomial regression ------------------------------------------
 
 library(tidymodels)
 library(nnet)
@@ -331,7 +331,7 @@ cat("Training cases: ", nrow(fifa_train), "\n",
 ### Let's specifiy a multinomial regression via nnet
 
 mr_spec <- multinom_reg(
-  penalty = 1,
+  penalty = 0.5,
   engine = "nnet",
   mode = "classification")
 
@@ -365,7 +365,7 @@ results %>% slice_head(n = 10)
 results %>%
   conf_mat(truth = Position, estimate = .pred_class)
 
-### In this case only the midfielders got predicted accurately (93% correctly predicted)
+### In this case only the midfielders got predicted accurately
 ### However, this model performed really badly in predicting defenders and strikers. 
 
 ### It could be easier to visualise this through a heat map:
@@ -402,10 +402,7 @@ library(rpart)
 library(e1071)
 library(randomForest)
 
-
 # We create training and testing data we'll use for all our models --------
-
-fifa_cleaned$Position <- factor(fifa_cleaned$Position)
 
 set.seed(123)
 
@@ -488,6 +485,172 @@ print(svm_tune) ### Allows you to select best cost and gamma parameter
 
 SVM_RETUNE <- svm(Position ~ ., data = training, cost = ..., gamma = ...)
 confusionMatrix(preditc(SVM_RETUNE, testing), testing$Position)
+
+
+# K-NEAREST NEIGHBOURS ----------------------------------------------------
+
+library(e1071) 
+library(caTools) 
+library(class)
+library(caret)
+
+### Let's turn the position variable into numbers
+
+fifa_cleaned2 <- fifa_cleaned %>%
+  mutate(Position = case_when(
+    Position == "Defender" ~ 1,
+    Position == "Midfielder" ~ 2,
+    Position == "Striker" ~ 3
+  ))
+
+fifa_cleaned2$Position = factor(fifa_cleaned2$Position)
+
+### Split the data
+
+split <- sample.split(fifa_cleaned2, SplitRatio = 0.7) 
+train_cl <- subset(fifa_cleaned2, split == "TRUE") 
+test_cl <- subset(fifa_cleaned2, split == "FALSE") 
+
+# Feature Scaling 
+
+train_scale <- scale(train_cl[, 2:14]) 
+test_scale <- scale(test_cl[, 2:14])
+
+### Use the knn function
+
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 1) 
+
+# Confusion Matrix 
+cm <- table(test_cl$Position, classifier_knn) 
+cm
+
+### Still not great
+
+# Model Evaluation - Choosing K 
+
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 3 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 3) 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 5 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 5) 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 7 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 7) 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 15 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 15) 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 19 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 19) 
+misClassError <- mean(classifier_knn != test_cl$Position) 
+print(paste('Accuracy =', 1-misClassError))
+
+### Let's plot the accuracy for different values of K.
+
+# Data preparation
+k_values <- c(1, 3, 5, 7, 15, 19)
+
+# Calculate accuracy for each k value
+accuracy_values <- sapply(k_values, function(k) {
+  classifier_knn <- knn(train = train_scale, 
+                        test = test_scale, 
+                        cl = train_cl$Position, 
+                        k = k)
+  1 - mean(classifier_knn != test_cl$Position)
+})
+
+
+# Create a data frame for plotting
+accuracy_data <- data.frame(K = k_values, Accuracy = accuracy_values)
+
+# Plotting
+ggplot(accuracy_data, aes(x = K, y = Accuracy)) +
+  geom_line(color = "lightblue", size = 1) +
+  geom_point(color = "lightgreen", size = 3) +
+  labs(title = "Model Accuracy for Different K Values",
+       x = "Number of Neighbors (K)",
+       y = "Accuracy") +
+  theme_minimal()
+
+### It seems like higher values of k increase accuracy. Let's see if we can go
+### even further
+
+validationIndex <- createDataPartition(fifa_cleaned2$Position,
+                                       p=0.70, list=FALSE)
+
+train <- fifa_cleaned2[validationIndex,] 
+test <- fifa_cleaned2[-validationIndex,] 
+
+trainControl <- trainControl(method="repeatedcv", number=20, repeats=3)
+metric <- "Accuracy"
+
+### Let's search for a set number of K's
+  
+set.seed(7)
+
+grid <- expand.grid(.k=seq(1,50,by=1))
+
+fit.knn <- train(Position ~ ., data = train, method="knn", 
+                 metric = metric, tuneGrid = grid,
+                 trControl = trainControl)
+
+knn.k2 <- fit.knn$bestTune # keep this optimal k for testing with stand alone knn() function in next section
+
+print(fit.knn)
+
+### Best model is k = 39, but it's not much higher.
+
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl$Position, 
+                      k = 39) 
+
+# Confusion Matrix 
+cm <- table(test_cl$Position, classifier_knn) 
+cm
+
+
+
+
+
+
+
+ 
+
+
+
+
+
 
 
 
