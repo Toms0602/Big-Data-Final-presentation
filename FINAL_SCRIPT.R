@@ -466,7 +466,7 @@ results %>%
 
 # We create training and testing data we'll use for all our models --------
 
-set.seed(123)
+set.seed(321)
 
 inTrain <- createDataPartition(y = fifa_cleaned$Position, p = .70,
                                list = FALSE)
@@ -647,9 +647,29 @@ cm
 
 # ELASTIC NET -------------------------------------------------------------
 
+# Let's first make a slighlty different subset than fifa_ordered3
+
+fifa_ordered4 <- fifa_ordered2 %>% 
+  mutate(Tackle = (SlidingTackle + StandingTackle)/2) %>%
+  mutate(Passing = (LongPassing + ShortPassing + Crossing + Vision + Curve +
+                      FKAccuracy)/6) %>%
+  mutate(Speed = (Acceleration + SprintSpeed)/2) %>%
+  mutate(Technique = (BallControl + Dribbling)/2) %>%
+  mutate(Shooting = (Finishing + Volleys + ShotPower + LongShots + Positioning)/5) %>%
+  mutate(Equilibrium = (Agility + Balance)/2) %>%
+  mutate(BallRecovery = (Aggression + Interceptions + Marking)/3) %>%
+  mutate(Reflexes = (Reactions + Composure)/2) %>%
+  dplyr::select(!c(SlidingTackle, StandingTackle, LongPassing, ShortPassing, 
+                   Crossing, Vision, Curve, Acceleration , SprintSpeed,
+                   BallControl, FKAccuracy, Positioning, Reactions, Composure,
+                   Dribbling, Finishing, Volleys, ShotPower, LongShots, Agility,
+                   Balance, Aggression, Interceptions, Marking))
+
 # Selection
-data <- fifa_ordered3 %>%
-  dplyr::select(Tackle, Passing, Speed, Technique, Shooting, Equilibrium, BallRecovery, Reflexes, Position)
+data <- fifa_ordered4 %>%
+  dplyr::select(Tackle, Passing, Speed, Technique,
+                Shooting, Equilibrium, BallRecovery,
+                Reflexes, Position)
 
 # Position as a factor
 data$Position <- as.factor(data$Position)
@@ -663,7 +683,7 @@ y <- data$Position
 
 # Data was split using a ratio of 80% for the training set and 20% for the test set, maintaining reproducibility with set.seed(123)
 
-set.seed(123)  
+set.seed(678)  
 
 trainIndex <- createDataPartition(y, p = .8, list = FALSE)
 x_train <- x[trainIndex, ]
@@ -697,3 +717,95 @@ print(paste("Accuracy:", accuracy))
 
 confusionMatrix <- confusionMatrix(as.factor(predicted_roles), as.factor(y_test))
 print(confusionMatrix)
+
+
+# ELASTIC NET ON 3000 BEST PLAYERS ----------------------------------------
+
+# We can perform this same analysis on the best_players subset we
+# created before
+
+# Let's select the same variables as fifa_ordered4 from it
+
+top_defenders2 <- fifa_ordered4 %>%
+  filter(Position == "Defender") %>%
+  arrange(desc(Overall)) %>%
+  slice(1:1000) 
+
+# Midfielders
+
+top_midfielders2 <- fifa_ordered4 %>%
+  filter(Position == "Midfielder") %>%
+  arrange(desc(Overall)) %>%
+  slice(1:1000)
+
+# Strikers
+
+top_strikers2 <- fifa_ordered4 %>%
+  filter(Position == "Striker") %>%
+  arrange(desc(Overall)) %>%
+  slice(1:1000) 
+
+# Now let's combine them
+
+best_players2 <- bind_rows(top_defenders2, top_midfielders2, top_strikers2)
+
+# Now let's perform elastic net classification
+
+# Selection
+data2 <- best_players2 %>%
+  dplyr::select(Tackle, Passing, Speed, Technique,
+                Shooting, Equilibrium, BallRecovery,
+                Reflexes, Position)
+
+# Position as a factor
+data2$Position <- as.factor(data2$Position)
+
+
+# Create the predictor matrix and response vector
+# -1 to not include the intercept
+
+x <- model.matrix(Position ~ . - 1, data = data2)  
+y <- data2$Position
+
+# Data was split using a ratio of 80% for the training set and 20% for the test set, maintaining reproducibility with set.seed(123)
+
+set.seed(679)  
+
+trainIndex <- createDataPartition(y, p = .8, list = FALSE)
+x_train <- x[trainIndex, ]
+y_train <- y[trainIndex]
+x_test <- x[-trainIndex, ]
+y_test <- y[-trainIndex]
+
+
+# Finding the best lambda and alpha parameters with cross-validation
+
+cv_model <- cv.glmnet(x_train, y_train, family = "multinomial",
+                      type.measure = "class", alpha = 0.5)
+
+# Train the Elastic Net model
+
+final_model <- glmnet(x_train, y_train, family = "multinomial",
+                      lambda = cv_model$lambda.min, alpha = 0.5)
+
+
+# Predictions on the test set
+
+predicted_roles <- predict(final_model, s = cv_model$lambda.min,
+                           newx = x_test, type = "class")
+
+# Accuracy calculation
+
+accuracy <- sum(predicted_roles == y_test) / length(y_test)
+print(paste("Accuracy:", accuracy))
+
+# Confusion matrix
+
+confusionMatrix <- confusionMatrix(as.factor(predicted_roles), as.factor(y_test))
+print(confusionMatrix)
+
+###############################################################################
+
+################################### THE END ###################################
+
+###############################################################################
