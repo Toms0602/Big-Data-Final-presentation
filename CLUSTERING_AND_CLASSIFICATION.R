@@ -640,19 +640,222 @@ cm <- table(test_cl$Position, classifier_knn)
 cm
 
 
+# Trying classification with PCA components as predictors -----------------
+
+library(stats)
+
+### Doing a quick PCA
+
+pca_results2 <- prcomp(fifa_cleaned[, -1], scale. = TRUE)
+
+### Let's get the principal components
+
+pca_data <- data.frame(pca_results2$x)
+
+### Add the position column back to the data
+
+pca_data$Position <- fifa_cleaned$Position
+
+### We can perform classification with the pca_data.
+
+### Let's try random forest
+
+set.seed(123)
+
+pca_data$Position = factor(pca_data$Position)
+
+inTrain2 <- createDataPartition(y = pca_data$Position, p = .70,
+                               list = FALSE)
+
+training2 <- fifa_cleaned[inTrain2,]
+testing2 <- fifa_cleaned[-inTrain2,]
+
+train_control <- trainControl(method = "cv",
+                              number = 10,
+                              savePredictions = TRUE)
+
+RF1 <- train(Position ~ ., method = "rf", 
+             trControl = train_control,
+             preProcess = c("center", "scale"),
+             tuneLength = 2,
+             data = training2)
+
+print(RF1)
+### Again, accuracy is not great
+
+confusionMatrix(predict(RF1, testing2), testing2$Position)
+### The random forest predicts defenders a bit better than other methods.
+### There is still an issue with the strikers.
+
+### Let's do a random forest again but with the randomForest package
+
+RF2 <- randomForest(Position ~ ., training2)
+
+print(RF2)
 
 
 
+### Let's try k-nearest neighbours
+
+split2 <- sample.split(pca_data, SplitRatio = 0.7) 
+train_cl2 <- subset(pca_data, split == "TRUE") 
+test_cl2 <- subset(pca_data, split == "FALSE") 
+
+train_scale <- train_cl2[, 1:13] 
+test_scale <- test_cl2[, 1:13]
+
+### Use the knn function
+
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 1) 
+
+# Confusion Matrix 
+cm <- table(test_cl2$Position, classifier_knn) 
+cm
+
+### Still not great
+
+# Model Evaluation - Choosing K 
+
+# Calculate out of Sample error 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 3 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 3) 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 5 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 5) 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 7 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 7) 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 15 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 15) 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError)) 
+
+# K = 19 
+classifier_knn <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 19) 
+misClassError <- mean(classifier_knn != test_cl2$Position) 
+print(paste('Accuracy =', 1-misClassError))
+
+### Let's plot the accuracy for different values of K.
+
+# Data preparation
+k_values <- c(1, 3, 5, 7, 15, 19)
+
+# Calculate accuracy for each k value
+accuracy_values <- sapply(k_values, function(k) {
+  classifier_knn <- knn(train = train_scale, 
+                        test = test_scale, 
+                        cl = train_cl2$Position, 
+                        k = k)
+  1 - mean(classifier_knn != test_cl2$Position)
+})
 
 
- 
+# Create a data frame for plotting
+accuracy_data <- data.frame(K = k_values, Accuracy = accuracy_values)
 
+# Plotting
+ggplot(accuracy_data, aes(x = K, y = Accuracy)) +
+  geom_line(color = "lightblue", size = 1) +
+  geom_point(color = "lightgreen", size = 3) +
+  labs(title = "Model Accuracy for Different K Values",
+       x = "Number of Neighbors (K)",
+       y = "Accuracy") +
+  theme_minimal()
 
+### Let's see confusion matrix for k = 19
 
+classifier_knn19 <- knn(train = train_scale, 
+                      test = test_scale, 
+                      cl = train_cl2$Position, 
+                      k = 19) 
 
+# Confusion Matrix 
+cm <- table(test_cl2$Position, classifier_knn19) 
+cm
 
+### Let's see for higher values of k 
 
+k_values <- c(21:61)
 
+# Calculate accuracy for each k value
 
+accuracy_values2 <- sapply(k_values, function(k) {
+  classifier_knn <- knn(train = train_scale, 
+                        test = test_scale, 
+                        cl = train_cl2$Position, 
+                        k = k)
+  1 - mean(classifier_knn != test_cl2$Position)
+})
 
+# Create a data frame for plotting
+accuracy_data2 <- data.frame(K = k_values, Accuracy = accuracy_values2)
 
+# Plotting
+ggplot(accuracy_data2, aes(x = K, y = Accuracy)) +
+  geom_line(color = "lightblue", size = 1) +
+  geom_point(color = "lightgreen", size = 3) +
+  labs(title = "Model Accuracy for Different K Values",
+       x = "Number of Neighbors (K)",
+       y = "Accuracy") +
+  theme_minimal()
+
+### Highest accuracy for k = 49
+
+classifier_knn49 <- knn(train = train_scale, 
+                        test = test_scale, 
+                        cl = train_cl2$Position, 
+                        k = 49) 
+
+# Confusion Matrix 
+cm <- table(test_cl2$Position, classifier_knn49) 
+cm
+
+### Let's try SVM
+
+svm_model <- svm(Position ~ ., data = training2,
+                 kernel = "linear")
+
+svm_predictions <- predict(svm_model, testing2)
+
+confusionMatrix(svm_predictions, testing2$Position)
+
+### Cross validate
+
+control <- trainControl(method = "cv", number = 10)
+
+svm_tuned <- train(Position ~ ., data = training2, method = "svmLinear",
+                   trControl = control)
+
+svm_predictions_tuned <- predict(svm_tuned, testing2)
+
+confusionMatrix(svm_predictions_tuned, testing2$Position)
+
+### Bad results
